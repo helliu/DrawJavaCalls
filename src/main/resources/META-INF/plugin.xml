@@ -1,0 +1,57 @@
+<!-- Plugin Configuration File: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <!-- Unique identifier of the plugin. It should be FQN, cannot be changed between the plugin versions. -->
+    <id>com.helliu.DrawJavaCalls</id>
+
+    <!-- Public plugin name should be written in Title Case.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-name -->
+    <name>DrawJavaCalls</name>
+
+    <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
+    <vendor url="https://github.com/helliu">helliu</vendor>
+
+    <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-description -->
+    <description><![CDATA[
+        With a simply click draw Java Calls between methods to diagrams.<br>
+Put the cursor inside a java method, and press <b>CTRL + SHIFT + U</b>  to start. The selected method will be added to the diagram. Or CTRL + SHIFT + Y to add the method as the same level as the selected.
+
+Usefull to analyse async and event codes when call hierarchy cannot trace the usage calls.
+    ]]></description>
+
+    <!-- Product and plugin compatibility requirements.
+         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
+
+    <depends>com.intellij.java</depends>
+    <!-- Extensions defined by the plugin.
+         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="DrawJavaCalls"
+                    anchor="right"
+                    factoryClass="com.helliu.drawjavacalls.ui.DiagramToolWindowFactory"
+                    icon="AllIcons.Actions.DiagramDiff"/>
+    </extensions>
+
+    <actions>
+        <action id="com.helliu.drawjavacalls.AddDiagramNodeAction"
+                class="com.helliu.drawjavacalls.action.AddDiagramNodeAction"
+                text="Add Method to Diagram (New Level)"
+                description="Adds the current method to the call diagram as a new level">
+            <keyboard-shortcut first-keystroke="shift alt U" keymap="$default"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+        <action id="com.helliu.drawjavacalls.AddDiagramSiblingNodeAction"
+                class="com.helliu.drawjavacalls.action.AddDiagramSiblingNodeAction"
+                text="Add Method to Diagram (Sibling Level)"
+                description="Adds the current method to the call diagram as a sibling level">
+            <keyboard-shortcut first-keystroke="shift alt Y" keymap="$default"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+        <action id="com.helliu.drawjavacalls.DeleteDiagramNodeAction"
+                class="com.helliu.drawjavacalls.action.DeleteDiagramNodeAction"
+                text="Delete Node"
+                description="Deletes the selected node from the diagram">
+            <keyboard-shortcut first-keystroke="DELETE" keymap="$default"/>
+        </action>
+    </actions>
+</idea-plugin>
