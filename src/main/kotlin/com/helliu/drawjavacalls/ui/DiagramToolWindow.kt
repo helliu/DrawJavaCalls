@@ -181,7 +181,21 @@ class DiagramToolWindow(private val project: Project) {
                         path = path.substring(1)
                     }
 
-                    val parts = path.split("#")
+                    // Normalize slashes for easier processing
+                    path = path.replace("\\", "/")
+
+                    val parts = if (path.contains("#")) {
+                        path.split("#")
+                    } else {
+                        // Handle line numbers like C:/path/to/file:52
+                        val lastColonIndex = path.lastIndexOf(':')
+                        if (lastColonIndex > 2) { // Ensure it's not the drive letter colon (C:)
+                            listOf(path.substring(0, lastColonIndex), ":" + path.substring(lastColonIndex + 1))
+                        } else {
+                            listOf(path)
+                        }
+                    }
+                    
                     val filePath = parts[0]
                     val anchor = if (parts.size > 1) parts[1] else null
                     val virtualFile = LocalFileSystem.getInstance().findFileByPath(filePath)
@@ -190,13 +204,20 @@ class DiagramToolWindow(private val project: Project) {
                             var descriptor = OpenFileDescriptor(project, virtualFile)
                             
                             if (anchor != null) {
-                                val psiFile = PsiManager.getInstance(project).findFile(virtualFile)
-                                if (psiFile != null) {
-                                    val cleanAnchor = anchor.removeSuffix("()").trim()
-                                    val elements = PsiTreeUtil.findChildrenOfAnyType(psiFile, PsiNameIdentifierOwner::class.java)
-                                    val target = elements.find { it.name == cleanAnchor }
-                                    if (target != null) {
-                                        descriptor = OpenFileDescriptor(project, virtualFile, target.textOffset)
+                                if (anchor.startsWith(":")) {
+                                    val lineNumber = anchor.substring(1).toIntOrNull()
+                                    if (lineNumber != null) {
+                                        descriptor = OpenFileDescriptor(project, virtualFile, lineNumber - 1, 0)
+                                    }
+                                } else {
+                                    val psiFile = PsiManager.getInstance(project).findFile(virtualFile)
+                                    if (psiFile != null) {
+                                        val cleanAnchor = anchor.removeSuffix("()").trim()
+                                        val elements = PsiTreeUtil.findChildrenOfAnyType(psiFile, PsiNameIdentifierOwner::class.java)
+                                        val target = elements.find { it.name == cleanAnchor }
+                                        if (target != null) {
+                                            descriptor = OpenFileDescriptor(project, virtualFile, target.textOffset)
+                                        }
                                     }
                                 }
                             }
