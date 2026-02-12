@@ -58,7 +58,7 @@ $relationsUml
         }
 
         return """
-            state ${element.getIdentifier()} as "${element.methodName}":[[${linkPath}#${element.methodName} ${element.methodName}]];
+            state ${element.getIdentifier()} as "${element.title}":[[${linkPath}${element.linkReference} ${element.title}]];
             state $stateName as "$fileName"
         """.trimIndent()
     }
@@ -106,8 +106,8 @@ class MermaidGenerator : DiagramGenerator {
             val originElement = elements.find { it.getIdentifier() == rel.diagramElementOrigin }
             val targetElement = elements.find { it.getIdentifier() == rel.diagramElementTarget }
             
-            val originLabel = originElement?.methodName ?: rel.diagramElementOrigin
-            val targetLabel = targetElement?.methodName ?: rel.diagramElementTarget
+            val originLabel = originElement?.title ?: rel.diagramElementOrigin
+            val targetLabel = targetElement?.title ?: rel.diagramElementTarget
             
             sb.append("    ${rel.diagramElementOrigin}[\"$originLabel\"] --> ${rel.diagramElementTarget}[\"$targetLabel\"]\n")
         }
@@ -115,7 +115,7 @@ class MermaidGenerator : DiagramGenerator {
         // Add standalone nodes if no relations
         if (relations.isEmpty()) {
             for (element in elements) {
-                sb.append("    ${element.getIdentifier()}[\"${element.methodName}\"]\n")
+                sb.append("    ${element.getIdentifier()}[\"${element.title}\"]\n")
             }
         }
 
@@ -138,7 +138,7 @@ class MermaidGenerator : DiagramGenerator {
                     element.filePath.replace("\\", "/")
                 }
             }
-            sb.append("    click ${element.getIdentifier()} \"${linkPath}#${element.methodName}\"\n")
+            sb.append("    click ${element.getIdentifier()} \"${linkPath}${element.linkReference}\"\n")
         }
 
         return sb.toString()
@@ -164,7 +164,7 @@ class MermaidGenerator : DiagramGenerator {
         for (fileNode in node.fileNodes.values) {
             sb.append("${indent}subgraph ${fileNode.id}[\"${fileNode.fileName}\"]\n")
             for (element in fileNode.elements) {
-                sb.append("$indent    ${element.getIdentifier()}[\"${element.methodName}\"]\n")
+                sb.append("$indent    ${element.getIdentifier()}[\"${element.title}\"]\n")
             }
             sb.append("${indent}end\n")
         }
@@ -173,6 +173,6 @@ class MermaidGenerator : DiagramGenerator {
     override fun getExtension(): String = "mmd"
 
     private fun findNodeName(elements: List<DiagramElement>, identifier: String): String {
-        return elements.find { it.getIdentifier() == identifier }?.methodName ?: identifier
+        return elements.find { it.getIdentifier() == identifier }?.title ?: identifier
     }
 }

@@ -3,16 +3,17 @@ package com.helliu.drawjavacalls.model
 class DiagramElement(
     val id: String = java.util.UUID.randomUUID().toString(),
     var filePath: String,
-    var methodName: String,
-    var group: String? = null
+    var title: String,
+    var group: String? = null,
+    var linkReference: String = title
 ) {
     fun getIdentifier(): String {
         val fileName = filePath.substringAfterLast('\\').substringAfterLast('/')
         val stateName = fileName.replace(".", "_")
         return if (group.isNullOrBlank()) {
-            "$stateName.$methodName"
+            "$stateName.$title"
         } else {
-            "$group.$stateName.$methodName"
+            "$group.$stateName.$title"
         }
     }
 }

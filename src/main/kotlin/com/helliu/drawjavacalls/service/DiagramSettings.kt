@@ -10,7 +10,8 @@ class DiagramSettings : PersistentStateComponent<DiagramSettings.State> {
     data class State(
         var diagramType: String = DiagramType.PLANT_UML.name,
         var useProjectRoot: Boolean = true,
-        var customRootPath: String = ""
+        var customRootPath: String = "",
+        var loadFromEditor: Boolean = true
     )
 
     private var myState = State()
@@ -41,6 +42,12 @@ class DiagramSettings : PersistentStateComponent<DiagramSettings.State> {
         get() = myState.customRootPath
         set(value) {
             myState.customRootPath = value
+        }
+
+    var loadFromEditor: Boolean
+        get() = myState.loadFromEditor
+        set(value) {
+            myState.loadFromEditor = value
         }
 
     companion object {

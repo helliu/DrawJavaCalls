@@ -33,8 +33,11 @@ class JavaMethodDiagram(val project: Project) {
         listeners.forEach { it.onDiagramChanged() }
     }
 
-    fun addNode(filePath: String, methodName: String, group: String? = null) {
-        val newNode = DiagramElement(filePath = filePath, methodName = methodName, group = group)
+    fun addNode(filePath: String, title: String, group: String? = null, linkReference: String? = null) {
+        val newNode = DiagramElement(filePath = filePath, title = title, group = group)
+        if (linkReference != null) {
+            newNode.linkReference = linkReference
+        }
         val parentNode = selectedDiagramNode ?: elements.lastOrNull()
         elements.add(newNode)
         
@@ -46,8 +49,11 @@ class JavaMethodDiagram(val project: Project) {
         notifyChanged()
     }
 
-    fun addSibling(filePath: String, methodName: String, group: String? = null) {
-        val newNode = DiagramElement(filePath = filePath, methodName = methodName, group = group)
+    fun addSibling(filePath: String, title: String, group: String? = null, linkReference: String? = null) {
+        val newNode = DiagramElement(filePath = filePath, title = title, group = group)
+        if (linkReference != null) {
+            newNode.linkReference = linkReference
+        }
         val selected = selectedDiagramNode ?: elements.lastOrNull()
         val lastRelation = if (selected != null) {
             relations.findLast { it.diagramElementTarget == selected.getIdentifier() }
@@ -128,11 +134,12 @@ class JavaMethodDiagram(val project: Project) {
         notifyChanged()
     }
 
-    fun updateElement(element: DiagramElement, newFilePath: String, newMethodName: String, newGroup: String?) {
+    fun updateElement(element: DiagramElement, newFilePath: String, newTitle: String, newGroup: String?, newLinkReference: String) {
         val oldIdentifier = element.getIdentifier()
         element.filePath = newFilePath
-        element.methodName = newMethodName
+        element.title = newTitle
         element.group = newGroup
+        element.linkReference = newLinkReference
         val newIdentifier = element.getIdentifier()
 
         if (oldIdentifier != newIdentifier) {
@@ -193,7 +200,7 @@ class JavaMethodDiagram(val project: Project) {
         val projectRoot = project.basePath ?: ""
         val projectFolderName = projectRoot.substringAfterLast('\\').substringAfterLast('/')
 
-        // Extract elements: state identifier as "methodName":[[linkPath#methodName methodName]];
+        // Extract elements: state identifier as "title":[[linkPath#title title]];
         val elementRegex = """state\s+([^\s]+)\s+as\s+"([^"]+)":\[\[([^#]+)#([^\s]+)\s+[^\]]+\]\];""".toRegex()
         val stateToGroup = mutableMapOf<String, String?>()
 
@@ -201,7 +208,7 @@ class JavaMethodDiagram(val project: Project) {
             val match = elementRegex.find(line.trim())
             if (match != null) {
                 val identifier = match.groupValues[1]
-                val methodName = match.groupValues[2]
+                val title = match.groupValues[2]
                 var filePath = match.groupValues[3]
                 
                 if (filePath.startsWith("\$projectsPath/")) {
@@ -220,7 +227,7 @@ class JavaMethodDiagram(val project: Project) {
                 }
 
                 if (!elements.any { it.getIdentifier() == identifier }) {
-                    elements.add(DiagramElement(filePath = filePath, methodName = methodName, group = group))
+                    elements.add(DiagramElement(filePath = filePath, title = title, group = group))
                 }
             }
         }
@@ -243,18 +250,18 @@ class JavaMethodDiagram(val project: Project) {
         val projectFolderName = projectRoot.substringAfterLast('\\').substringAfterLast('/')
 
         // In Mermaid, we have identifiers and labels: id["label"]
-        // And links: click id "linkPath#methodName"
+        // And links: click id "linkPath#title"
         val idToElement = mutableMapOf<String, DiagramElement>()
         val nodeRegex = """([^\s\[]+)\["([^"]+)"\]""".toRegex()
         val linkRegex = """click\s+([^\s]+)\s+"([^#]+)#([^"]+)"""".toRegex()
 
-        // First pass: find all nodes and their labels (methodNames)
+        // First pass: find all nodes and their labels (titles)
         lines.forEach { line ->
             nodeRegex.findAll(line).forEach { match ->
                 val id = match.groupValues[1]
-                val methodName = match.groupValues[2]
+                val title = match.groupValues[2]
                 // We don't have filePath yet, will get from link
-                idToElement[id] = DiagramElement(filePath = "", methodName = methodName)
+                idToElement[id] = DiagramElement(filePath = "", title = title)
             }
         }
 

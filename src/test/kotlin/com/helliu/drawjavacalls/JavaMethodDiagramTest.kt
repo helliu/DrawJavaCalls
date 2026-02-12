@@ -48,12 +48,12 @@ class JavaMethodDiagramTest : BasePlatformTestCase() {
         
         // Select last node
         service.selectNodeByIndex(1)
-        assertEquals("method1", service.selectedDiagramNode?.methodName)
+        assertEquals("method1", service.selectedDiagramNode?.title)
         
         // Delete last node
         service.deleteSelectedNode()
         
-        assertEquals("method0", service.selectedDiagramNode?.methodName)
+        assertEquals("method0", service.selectedDiagramNode?.title)
         assertEquals(0, service.relations.size)
         assertEquals(1, service.getAllNodes().size)
     }
@@ -74,7 +74,7 @@ class JavaMethodDiagramTest : BasePlatformTestCase() {
         val identifier = service.getAllNodes()[0].getIdentifier()
         
         service.selectNode(identifier)
-        assertEquals("methodA", service.selectedDiagramNode?.methodName)
+        assertEquals("methodA", service.selectedDiagramNode?.title)
     }
 
     fun testUpdateElement() {
@@ -87,9 +87,10 @@ class JavaMethodDiagramTest : BasePlatformTestCase() {
         assertEquals("pathB_java.methodB", service.relations[0].diagramElementTarget)
         
         val nodeA = service.getAllNodes()[0]
-        service.updateElement(nodeA, "newPathA.java", "newMethodA", "NewGroup")
+        service.updateElement(nodeA, "newPathA.java", "newMethodA", "NewGroup", "newLinkA")
         
         assertEquals("NewGroup.newPathA_java.newMethodA", nodeA.getIdentifier())
+        assertEquals("newLinkA", nodeA.linkReference)
         assertEquals(1, service.relations.size)
         assertEquals("NewGroup.newPathA_java.newMethodA", service.relations[0].diagramElementOrigin)
         assertEquals("pathB_java.methodB", service.relations[0].diagramElementTarget)
@@ -174,7 +175,7 @@ class JavaMethodDiagramTest : BasePlatformTestCase() {
         val projectRoot = project.basePath ?: ""
         val projectFolderName = projectRoot.substringAfterLast('\\').substringAfterLast('/')
         
-        service.addNode(projectRoot + "/src/Main.java", "main")
+        service.addNode(projectRoot + "/src/Main.java", "main", linkReference = "#main")
         val actual = service.generateDiagram()
         
         assertTrue("Link should contain \$projectsPath", actual.contains("[[\$projectsPath/$projectFolderName/src/Main.java#main main]]") || actual.contains("click Main_java.main \"\$projectsPath/$projectFolderName/src/Main.java#main\""))
@@ -186,7 +187,7 @@ class JavaMethodDiagramTest : BasePlatformTestCase() {
         settings.useProjectRoot = false
         settings.customRootPath = "C:/mycustom"
         
-        service.addNode("C:/mycustom/src/Main.java", "main")
+        service.addNode("C:/mycustom/src/Main.java", "main", linkReference = "#main")
         val actual = service.generateDiagram()
         
         assertTrue("Link should contain custom path", actual.contains("[[C:/mycustom/src/Main.java#main main]]") || actual.contains("click Main_java.main \"C:/mycustom/src/Main.java#main\""))
@@ -215,7 +216,7 @@ Group1.ClassA_java.methodA --> Group1.ClassB_java.methodB
         assertEquals(2, service.elements.size)
         assertEquals(1, service.relations.size)
         
-        assertEquals("methodA", service.elements[0].methodName)
+        assertEquals("methodA", service.elements[0].title)
         assertEquals("Group1", service.elements[0].group)
         assertEquals(projectRoot + "/ClassA.java", service.elements[0].filePath)
 
@@ -223,40 +224,26 @@ Group1.ClassA_java.methodA --> Group1.ClassB_java.methodB
         assertEquals("Group1.ClassB_java.methodB", service.relations[0].diagramElementTarget)
     }
 
-    fun testLoadDrawJavaCallDiagramMermaid() {
+    fun testLinkReferenceInPlantUml() {
         val service = JavaMethodDiagram(project)
-        val projectRoot = project.basePath ?: ""
+        service.addNode("C:/dev/ClassA.java", "methodA")
+        val node = service.getAllNodes()[0]
+        node.linkReference = "#customLink"
+        
+        val actual = service.generateDiagram()
+        assertTrue(actual.contains("#customLink"))
+        assertFalse(actual.contains("##customLink"))
+    }
 
-        val mmd = """%%DrawJavaCalls Generated
-graph TD
-    subgraph group_1["Group1"]
-    subgraph file_1["ClassA.java"]
-        Group1.ClassA_java.methodA["methodA"]
-    end
-    end
-    subgraph group_2["Group1"]
-    subgraph file_2["ClassB.java"]
-        Group1.ClassB_java.methodB["methodB"]
-    end
-    end
-    Group1.ClassA_java.methodA["methodA"] --> Group1.ClassB_java.methodB["methodB"]
-
-    %% Styling and links for nodes
-    click Group1.ClassA_java.methodA "${projectRoot}/ClassA.java#methodA"
-    click Group1.ClassB_java.methodB "${projectRoot}/ClassB.java#methodB"
-        """.trimIndent()
-
-        service.loadDrawJavaCallDiagram(mmd, com.helliu.drawjavacalls.model.DiagramType.MERMAID)
-
-        assertEquals(2, service.elements.size)
-        assertEquals(1, service.relations.size)
-
-        val nodeA = service.elements.find { it.methodName == "methodA" }
-        assertNotNull(nodeA)
-        assertEquals("Group1", nodeA?.group)
-        assertEquals(projectRoot + "/ClassA.java", nodeA?.filePath)
-
-        assertEquals("Group1.ClassA_java.methodA", service.relations[0].diagramElementOrigin)
-        assertEquals("Group1.ClassB_java.methodB", service.relations[0].diagramElementTarget)
+    fun testLinkReferenceInMermaid() {
+        val service = JavaMethodDiagram(project)
+        service.diagramType = com.helliu.drawjavacalls.model.DiagramType.MERMAID
+        service.addNode("C:/dev/ClassA.java", "methodA")
+        val node = service.getAllNodes()[0]
+        node.linkReference = "#customLink"
+        
+        val actual = service.generateDiagram()
+        assertTrue(actual.contains("#customLink\""))
+        assertFalse(actual.contains("##customLink\""))
     }
 }

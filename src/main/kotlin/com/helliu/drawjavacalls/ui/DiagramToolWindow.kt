@@ -140,6 +140,7 @@ class DiagramToolWindow(private val project: Project) {
     private val groupNewNodeField = JTextField(10)
     private val diagramTypeCombo = JComboBox(DiagramType.values())
     private val useProjectRootCheckBox = JCheckBox("Use \$projectsPath", true)
+    private val loadFromEditorCheckBox = JCheckBox("Load from editor", true)
     private val customRootField = JTextField()
     private val browseCustomRootButton = JButton(AllIcons.Actions.MenuOpen)
 
@@ -217,7 +218,7 @@ class DiagramToolWindow(private val project: Project) {
         project.messageBus.connect().subscribe(FileEditorManagerListener.FILE_EDITOR_MANAGER, object : FileEditorManagerListener {
             override fun selectionChanged(event: com.intellij.openapi.fileEditor.FileEditorManagerEvent) {
                 val file = event.newFile
-                if (file != null && (file.extension == "puml" || file.extension == "mmd")) {
+                if (loadFromEditorCheckBox.isSelected && file != null && (file.extension == "puml" || file.extension == "mmd")) {
                     loadFile(file)
                 }
             }
@@ -235,7 +236,7 @@ class DiagramToolWindow(private val project: Project) {
 
         // Initial check for selected file
         FileEditorManager.getInstance(project).selectedFiles.firstOrNull()?.let {
-            if (it.extension == "puml" || it.extension == "mmd") {
+            if (loadFromEditorCheckBox.isSelected && (it.extension == "puml" || it.extension == "mmd")) {
                 loadFile(it)
             }
         }
@@ -396,6 +397,12 @@ class DiagramToolWindow(private val project: Project) {
         customRootField.minimumSize = Dimension(150, 24)
         browseCustomRootButton.isEnabled = true // Always enabled
         browseCustomRootButton.preferredSize = Dimension(24, 24)
+        
+        loadFromEditorCheckBox.isSelected = settings.loadFromEditor
+        loadFromEditorCheckBox.toolTipText = "To automatically load the digram when a puml or mmd file is opened in the editor."
+        loadFromEditorCheckBox.addActionListener {
+            settings.loadFromEditor = loadFromEditorCheckBox.isSelected
+        }
 
         useProjectRootCheckBox.addActionListener {
             settings.useProjectRoot = useProjectRootCheckBox.isSelected
@@ -437,6 +444,7 @@ class DiagramToolWindow(private val project: Project) {
 
         linkPanel.add(typeGroupPanel)
         linkPanel.add(useProjectRootCheckBox)
+        linkPanel.add(loadFromEditorCheckBox)
         linkPanel.add(projectValueGroupPanel)
         
         bottomPanel.add(linkPanel, BorderLayout.CENTER)
@@ -741,11 +749,12 @@ class DiagramToolWindow(private val project: Project) {
 
 class EditElementDialog(private val project: Project, private val element: com.helliu.drawjavacalls.model.DiagramElement) : DialogWrapper(project) {
     private val filePathField = JTextField(element.filePath)
-    private val methodNameField = JTextField(element.methodName)
+    private val titleField = JTextField(element.title)
+    private val linkReferenceField = JTextField(element.linkReference)
     private val groupField = JTextField(element.group ?: "")
 
     init {
-        title = "Edit Selected Diagram Element"
+        title = "Edit Selected Element"
         init()
     }
 
@@ -772,10 +781,13 @@ class EditElementDialog(private val project: Project, private val element: com.h
         
         gbc.gridx = 1; gbc.weightx = 1.0; panel.add(filePathPanel, gbc)
 
-        gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0.0; panel.add(JLabel("Method Name:"), gbc)
-        gbc.gridx = 1; gbc.weightx = 1.0; panel.add(methodNameField, gbc)
+        gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0.0; panel.add(JLabel("Title:"), gbc)
+        gbc.gridx = 1; gbc.weightx = 1.0; panel.add(titleField, gbc)
 
-        gbc.gridx = 0; gbc.gridy = 2; gbc.weightx = 0.0; panel.add(JLabel("Group:"), gbc)
+        gbc.gridx = 0; gbc.gridy = 2; gbc.weightx = 0.0; panel.add(JLabel("Link Reference:"), gbc)
+        gbc.gridx = 1; gbc.weightx = 1.0; panel.add(linkReferenceField, gbc)
+
+        gbc.gridx = 0; gbc.gridy = 3; gbc.weightx = 0.0; panel.add(JLabel("Group:"), gbc)
         gbc.gridx = 1; gbc.weightx = 1.0; panel.add(groupField, gbc)
 
         return panel
@@ -783,7 +795,7 @@ class EditElementDialog(private val project: Project, private val element: com.h
 
     override fun doOKAction() {
         val service = project.service<JavaMethodDiagram>()
-        service.updateElement(element, filePathField.text, methodNameField.text, groupField.text.ifBlank { null })
+        service.updateElement(element, filePathField.text, titleField.text, groupField.text.ifBlank { null }, linkReferenceField.text)
         super.doOKAction()
     }
 }

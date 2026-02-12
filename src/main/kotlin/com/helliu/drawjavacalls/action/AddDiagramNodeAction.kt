@@ -33,11 +33,23 @@ abstract class AddDiagramNodeBaseAction : AnAction() {
 
         if (editor == null || psiFile == null) return
         
-        val element = psiFile.findElementAt(editor.caretModel.offset)
-        val method = PsiTreeUtil.getParentOfType(element, PsiMethod::class.java) ?: return
+        val offset = editor.caretModel.offset
+        val element = psiFile.findElementAt(offset)
+        val method = PsiTreeUtil.getParentOfType(element, PsiMethod::class.java)
         
-        val className = method.containingClass?.qualifiedName ?: method.containingClass?.name ?: "Unknown"
-        val methodName = method.name
+        val title: String
+        val linkReference: String
+        
+        if (psiFile is PsiJavaFile && method != null) {
+            title = method.name
+            linkReference = "#${method.name}"
+        } else {
+            val document = editor.document
+            val lineNumber = document.getLineNumber(offset) + 1
+            title = psiFile.name
+            linkReference = ":$lineNumber"
+        }
+        
         val filePath = psiFile.virtualFile.path
         
         val javaMethodDiagram = project.service<JavaMethodDiagram>()
@@ -65,47 +77,34 @@ abstract class AddDiagramNodeBaseAction : AnAction() {
             }
         }
 
-        updateDiagram(javaMethodDiagram, filePath, methodName, group)
+        updateDiagram(javaMethodDiagram, filePath, title, group, linkReference)
         
         val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("DrawJavaCalls")
         toolWindow?.show {
             val content = toolWindow.contentManager.getContent(0)
-            // This is a bit hacky, but we need to find the DiagramToolWindow instance
-            // In a real app, we might store it differently.
-            // For now, let's assume we can trigger refresh.
-            // Actually, we can use an event bus or just call refresh if we find it.
-            // Since we created it in DiagramToolWindowFactory, it's in the component.
-            // But better: let's just make it refresh.
-            // We can search for the component or use the service to notify listeners.
         }
         
-        // Alternative: trigger refresh via service if we had listeners, 
-        // but for now let's just find the tool window and refresh it if it's open.
-        // We'll add a refresh call here if possible.
         refreshToolWindow(project)
     }
     
-    abstract fun updateDiagram(service: JavaMethodDiagram, filePath: String, methodName: String, group: String? = null)
+    abstract fun updateDiagram(service: JavaMethodDiagram, filePath: String, title: String, group: String? = null, linkReference: String)
 
     private fun refreshToolWindow(project: Project) {
         val toolWindow = ToolWindowManager.getInstance(project).getToolWindow("DrawJavaCalls")
         if (toolWindow != null) {
             val content = toolWindow.contentManager.getContent(0)
-            // How to get DiagramToolWindow from content?
-            // Usually it's the component of the content.
-            // But we can also just use a message bus.
         }
     }
 }
 
 class AddDiagramNodeAction : AddDiagramNodeBaseAction() {
-    override fun updateDiagram(service: JavaMethodDiagram, filePath: String, methodName: String, group: String?) {
-        service.addNode(filePath, methodName, group)
+    override fun updateDiagram(service: JavaMethodDiagram, filePath: String, title: String, group: String?, linkReference: String) {
+        service.addNode(filePath, title, group, linkReference)
     }
 }
 
 class AddDiagramSiblingNodeAction : AddDiagramNodeBaseAction() {
-    override fun updateDiagram(service: JavaMethodDiagram, filePath: String, methodName: String, group: String?) {
-        service.addSibling(filePath, methodName, group)
+    override fun updateDiagram(service: JavaMethodDiagram, filePath: String, title: String, group: String?, linkReference: String) {
+        service.addSibling(filePath, title, group, linkReference)
     }
 }
