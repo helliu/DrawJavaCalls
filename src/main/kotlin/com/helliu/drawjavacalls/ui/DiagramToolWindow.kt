@@ -255,10 +255,13 @@ class DiagramToolWindow(private val project: Project) {
             }
         }
 
-        // Initial check for selected file
-        FileEditorManager.getInstance(project).selectedFiles.firstOrNull()?.let {
-            if (loadFromEditorCheckBox.isSelected && (it.extension == "puml" || it.extension == "mmd")) {
-                loadFile(it)
+        // Initial check for selected file - Delay slightly to avoid conflict with listener and ensure project is fully ready
+        ApplicationManager.getApplication().invokeLater {
+            if (project.isDisposed) return@invokeLater
+            FileEditorManager.getInstance(project).selectedFiles.firstOrNull()?.let {
+                if (loadFromEditorCheckBox.isSelected && (it.extension == "puml" || it.extension == "mmd")) {
+                    loadFile(it)
+                }
             }
         }
         
@@ -331,6 +334,7 @@ class DiagramToolWindow(private val project: Project) {
         val newButton = createButton(AllIcons.Actions.ClearCash, "Clear/New Diagram")
         newButton.addActionListener {
             javaMethodDiagram.newDiagram()
+            javaMethodDiagram.currentFilePath = null // Ensure it's cleared so reload works if same file is re-selected
             refreshDiagram()
         }
 
@@ -338,7 +342,10 @@ class DiagramToolWindow(private val project: Project) {
         saveButton.addActionListener { saveDiagram() }
 
         val loadButton = createButton(AllIcons.Actions.MenuOpen, "Load Diagram")
-        loadButton.addActionListener { loadDiagram() }
+        loadButton.addActionListener { 
+            javaMethodDiagram.currentFilePath = null // Force reload even if it was already "current"
+            loadDiagram() 
+        }
 
         // --- Build Toolbar ---
         val toolbar = JPanel(WrapLayout(FlowLayout.LEFT, 2, 2))
@@ -696,6 +703,7 @@ class DiagramToolWindow(private val project: Project) {
     }
 
     private fun loadFile(file: VirtualFile) {
+        if (javaMethodDiagram.currentFilePath == file.path) return
         javaMethodDiagram.currentFilePath = file.path
 
         if (file.extension == "mmd") {
