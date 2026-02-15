@@ -239,7 +239,7 @@ class DiagramToolWindow(private val project: Project) {
         project.messageBus.connect().subscribe(FileEditorManagerListener.FILE_EDITOR_MANAGER, object : FileEditorManagerListener {
             override fun selectionChanged(event: com.intellij.openapi.fileEditor.FileEditorManagerEvent) {
                 val file = event.newFile
-                if (loadFromEditorCheckBox.isSelected && file != null && (file.extension == "puml" || file.extension == "mmd")) {
+                if (loadFromEditorCheckBox.isSelected && file != null && (file.extension == "puml" || file.extension == "mmd" || file.extension == "drawio")) {
                     loadFile(file)
                 }
             }
@@ -259,7 +259,7 @@ class DiagramToolWindow(private val project: Project) {
         ApplicationManager.getApplication().invokeLater {
             if (project.isDisposed) return@invokeLater
             FileEditorManager.getInstance(project).selectedFiles.firstOrNull()?.let {
-                if (loadFromEditorCheckBox.isSelected && (it.extension == "puml" || it.extension == "mmd")) {
+                if (loadFromEditorCheckBox.isSelected && (it.extension == "puml" || it.extension == "mmd" || it.extension == "drawio")) {
                     loadFile(it)
                 }
             }
@@ -341,6 +341,9 @@ class DiagramToolWindow(private val project: Project) {
         val saveButton = createButton(AllIcons.Actions.MenuSaveall, "Save Diagram")
         saveButton.addActionListener { saveDiagram() }
 
+        val exportDrawIoButton = createButton(AllIcons.ToolbarDecorator.Export, "Export to Draw.io")
+        exportDrawIoButton.addActionListener { exportToDrawIo() }
+
         val loadButton = createButton(AllIcons.Actions.MenuOpen, "Load Diagram")
         loadButton.addActionListener { 
             javaMethodDiagram.currentFilePath = null // Force reload even if it was already "current"
@@ -374,6 +377,7 @@ class DiagramToolWindow(private val project: Project) {
 
         toolbar.add(newButton)
         toolbar.add(saveButton)
+        toolbar.add(exportDrawIoButton)
         toolbar.add(loadButton)
         addSeparator()
 
@@ -691,9 +695,27 @@ class DiagramToolWindow(private val project: Project) {
         }
     }
 
+    private fun exportToDrawIo() {
+        val descriptor = FileSaverDescriptor("Export to Draw.io", "Export diagram to Draw.io format", "drawio")
+        val baseDir = getDiagramsDir()
+        val wrapper = FileChooserFactory.getInstance().createSaveFileDialog(descriptor, project)
+        val fileWrapper = wrapper.save(baseDir, "diagram.drawio")
+        if (fileWrapper != null) {
+            val content = javaMethodDiagram.generateDrawIoDiagram()
+            
+            WriteAction.run<Exception> {
+                val parentDir = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(fileWrapper.file.parentFile)
+                val virtualFile = parentDir?.createChildData(this, fileWrapper.file.name)
+                if (virtualFile != null) {
+                    VfsUtil.saveText(virtualFile, content)
+                }
+            }
+        }
+    }
+
     private fun loadDiagram() {
         val descriptor = FileChooserDescriptor(true, false, false, false, false, false)
-            .withFileFilter { it.extension == "puml" || it.extension == "mmd" }
+            .withFileFilter { it.extension == "puml" || it.extension == "mmd" || it.extension == "drawio" }
         val baseDir = getDiagramsDir()
         val fileChooser = FileChooserFactory.getInstance().createFileChooser(descriptor, project, null)
         val files = fileChooser.choose(project, baseDir)
@@ -738,7 +760,7 @@ class DiagramToolWindow(private val project: Project) {
         if (javaMethodDiagram.diagramType == DiagramType.PLANT_UML) {
             val svg = convertPumlToSvg(diagramToLoad)
             loadDiagram(svg)
-        } else {
+        } else if (javaMethodDiagram.diagramType == DiagramType.MERMAID) {
             loadMermaidDiagram(diagramToLoad)
         }
     }

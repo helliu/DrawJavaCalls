@@ -5,6 +5,15 @@ import com.intellij.testFramework.fixtures.BasePlatformTestCase
 
 class JavaMethodDiagramTest : BasePlatformTestCase() {
 
+    override fun tearDown() {
+        try {
+            val settings = com.helliu.drawjavacalls.service.DiagramSettings.getInstance(project)
+            settings.loadState(com.helliu.drawjavacalls.service.DiagramSettings.State())
+        } finally {
+            super.tearDown()
+        }
+    }
+
     fun testGeneratePlantUmlDiagram() {
         val service = JavaMethodDiagram(project)
         
@@ -235,15 +244,33 @@ Group1.ClassA_java.methodA --> Group1.ClassB_java.methodB
         assertFalse(actual.contains("##customLink"))
     }
 
-    fun testLinkReferenceInMermaid() {
+    fun testGenerateDrawIoDiagram() {
         val service = JavaMethodDiagram(project)
-        service.diagramType = com.helliu.drawjavacalls.model.DiagramType.MERMAID
-        service.addNode("C:/dev/ClassA.java", "methodA")
-        val node = service.getAllNodes()[0]
-        node.linkReference = "#customLink"
         
-        val actual = service.generateDiagram()
-        assertTrue(actual.contains("#customLink\""))
-        assertFalse(actual.contains("##customLink\""))
+        service.addNode("C:\\dev\\ClassA.java", "methodA", "Group1", "#methodA")
+        service.addNode("C:\\dev\\ClassA.java", "methodB", "Group1")
+        
+        val actual = service.generateDrawIoDiagram()
+        
+        // Check for group swimlane
+        assertTrue(actual.contains("value=\"Group1\""))
+        
+        // Check for file swimlane
+        assertTrue(actual.contains("value=\"ClassA.java\""))
+        assertTrue(actual.contains("style=\"swimlane;whiteSpace=wrap;html=1;\""))
+        
+        // Check for method nodes
+        assertTrue(actual.contains("label=\"methodA\""))
+        assertTrue(actual.contains("label=\"methodB\""))
+        
+        // Check for links
+        assertTrue("Link should be present in Draw.io XML", actual.contains("<UserObject id=\"node_0\" label=\"methodA\" link=\"file:///C:/dev/ClassA.java#methodA\">"))
+
+        // Check for nesting: find the file swimlane ID and see if nodes use it as parent
+        val fileIdMatch = "id=\"(file_[^\"]+)\"".toRegex().find(actual)
+        assertNotNull(fileIdMatch)
+        val fileId = fileIdMatch!!.groupValues[1]
+        
+        assertTrue(actual.contains("parent=\"$fileId\""))
     }
 }

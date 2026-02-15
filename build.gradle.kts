@@ -25,10 +25,6 @@ dependencies {
 
         bundledPlugin("com.intellij.java")
     }
-    configurations.all {
-        resolutionStrategy.force("org.jetbrains.kotlin:kotlin-stdlib:2.1.20")
-        resolutionStrategy.force("org.jetbrains.kotlin:kotlin-reflect:2.1.20")
-    }
     implementation("net.sourceforge.plantuml:plantuml:1.2025.0")
     testImplementation("junit:junit:4.13.2")
 }

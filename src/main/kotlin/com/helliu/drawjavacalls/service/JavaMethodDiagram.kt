@@ -110,6 +110,14 @@ class JavaMethodDiagram(val project: Project) {
         return generator.generateDiagram(project, elements, relations)
     }
 
+    fun generateDrawIoDiagram(customProjectRoot: String? = null): String {
+        val generator = DrawIoGenerator()
+        if (customProjectRoot != null && DiagramSettings.getInstance(project).useProjectRoot) {
+            return generator.generateDiagramWithCustomRoot(project, elements, relations, customProjectRoot)
+        }
+        return generator.generateDiagram(project, elements, relations)
+    }
+
     fun getGenerator(): DiagramGenerator {
         return when (diagramType) {
             DiagramType.PLANT_UML -> PlantUmlGenerator()
