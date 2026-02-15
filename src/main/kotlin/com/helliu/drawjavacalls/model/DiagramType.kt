@@ -2,7 +2,8 @@ package com.helliu.drawjavacalls.model
 
 enum class DiagramType(val displayName: String) {
     PLANT_UML("PlantUml"),
-    MERMAID("Mermaid");
+    MERMAID("Mermaid"),
+    DRAW_IO("Draw.io");
 
     override fun toString(): String = displayName
 

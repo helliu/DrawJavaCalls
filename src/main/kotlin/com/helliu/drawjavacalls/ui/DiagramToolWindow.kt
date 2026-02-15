@@ -341,9 +341,6 @@ class DiagramToolWindow(private val project: Project) {
         val saveButton = createButton(AllIcons.Actions.MenuSaveall, "Save Diagram")
         saveButton.addActionListener { saveDiagram() }
 
-        val exportDrawIoButton = createButton(AllIcons.ToolbarDecorator.Export, "Export to Draw.io")
-        exportDrawIoButton.addActionListener { exportToDrawIo() }
-
         val loadButton = createButton(AllIcons.Actions.MenuOpen, "Load Diagram")
         loadButton.addActionListener { 
             javaMethodDiagram.currentFilePath = null // Force reload even if it was already "current"
@@ -377,7 +374,6 @@ class DiagramToolWindow(private val project: Project) {
 
         toolbar.add(newButton)
         toolbar.add(saveButton)
-        toolbar.add(exportDrawIoButton)
         toolbar.add(loadButton)
         addSeparator()
 
@@ -505,12 +501,59 @@ class DiagramToolWindow(private val project: Project) {
                 val projectFolderName = customRoot.replace("\\", "/").substringAfterLast('/')
                 diagramContent = diagramContent.replace("\$projectsPath/" + projectFolderName, customRoot.replace("\\", "/"))
             }
-            if (javaMethodDiagram.diagramType == DiagramType.PLANT_UML) {
-                val svg = convertPumlToSvg(diagramContent)
-                loadDiagram(svg)
-            } else {
-                loadMermaidDiagram(diagramContent)
+            when (javaMethodDiagram.diagramType) {
+                DiagramType.PLANT_UML -> {
+                    val svg = convertPumlToSvg(diagramContent)
+                    loadDiagram(svg)
+                }
+                DiagramType.MERMAID -> {
+                    loadMermaidDiagram(diagramContent)
+                }
+                DiagramType.DRAW_IO -> {
+                    loadDrawIoDiagram(diagramContent)
+                }
             }
+        }
+    }
+
+    private fun loadDrawIoDiagram(xml: String) {
+        val html = """
+            <html>
+            <head>
+                <style>
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                        margin: 0;
+                        padding: 20px;
+                        background-color: #ffffff;
+                    }
+                    .mxgraph {
+                        max-width: 100%;
+                        border: 1px solid transparent;
+                    }
+                </style>
+            </head>
+            <body>
+                <script id="xml-data" type="text/plain">${xml.replace("</script>", "<\\/script>")}</script>
+                <div class="mxgraph" id="diagram-container"></div>
+                <script>
+                    const xml = document.getElementById('xml-data').textContent;
+                    const container = document.getElementById('diagram-container');
+                    container.setAttribute('data-mxgraph', JSON.stringify({
+                        highlight: '#0078d4',
+                        nav: true,
+                        resize: true,
+                        toolbar: '',
+                        edit: '_blank',
+                        xml: xml
+                    }));
+                </script>
+                <script type="text/javascript" src="https://viewer.diagrams.net/js/viewer-static.min.js"></script>
+            </body>
+            </html>
+        """.trimIndent()
+        ApplicationManager.getApplication().invokeLater {
+            browser.loadHTML(html)
         }
     }
 
@@ -583,7 +626,7 @@ class DiagramToolWindow(private val project: Project) {
             </html>
         """.trimIndent()
 
-        println(html)
+        //println(html)
         ApplicationManager.getApplication().invokeLater {
             browser.loadHTML(html)
         }
@@ -655,8 +698,8 @@ class DiagramToolWindow(private val project: Project) {
             </html>
         """.trimIndent()
 
-        println("************* html")
-        println(html)
+//        println("************* html")
+//        println(html)
         ApplicationManager.getApplication().invokeLater {
             browser.loadHTML(html)
         }
@@ -695,23 +738,6 @@ class DiagramToolWindow(private val project: Project) {
         }
     }
 
-    private fun exportToDrawIo() {
-        val descriptor = FileSaverDescriptor("Export to Draw.io", "Export diagram to Draw.io format", "drawio")
-        val baseDir = getDiagramsDir()
-        val wrapper = FileChooserFactory.getInstance().createSaveFileDialog(descriptor, project)
-        val fileWrapper = wrapper.save(baseDir, "diagram.drawio")
-        if (fileWrapper != null) {
-            val content = javaMethodDiagram.generateDrawIoDiagram()
-            
-            WriteAction.run<Exception> {
-                val parentDir = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(fileWrapper.file.parentFile)
-                val virtualFile = parentDir?.createChildData(this, fileWrapper.file.name)
-                if (virtualFile != null) {
-                    VfsUtil.saveText(virtualFile, content)
-                }
-            }
-        }
-    }
 
     private fun loadDiagram() {
         val descriptor = FileChooserDescriptor(true, false, false, false, false, false)
@@ -732,6 +758,8 @@ class DiagramToolWindow(private val project: Project) {
             javaMethodDiagram.diagramType = DiagramType.MERMAID
         } else if (file.extension == "puml") {
             javaMethodDiagram.diagramType = DiagramType.PLANT_UML
+        } else if (file.extension == "drawio") {
+            javaMethodDiagram.diagramType = DiagramType.DRAW_IO
         } else {
             return
         }
@@ -745,6 +773,10 @@ class DiagramToolWindow(private val project: Project) {
             return
         } else if (content.trim().startsWith("%%DrawJavaCalls Generated")) {
             javaMethodDiagram.loadDrawJavaCallDiagram(content, DiagramType.MERMAID)
+            refreshDiagram()
+            return
+        } else if (content.contains("<!-- DrawJavaCalls Generated -->")) {
+            javaMethodDiagram.loadDrawJavaCallDiagram(content, DiagramType.DRAW_IO)
             refreshDiagram()
             return
         }

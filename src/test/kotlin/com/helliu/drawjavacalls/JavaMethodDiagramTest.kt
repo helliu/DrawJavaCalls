@@ -246,11 +246,12 @@ Group1.ClassA_java.methodA --> Group1.ClassB_java.methodB
 
     fun testGenerateDrawIoDiagram() {
         val service = JavaMethodDiagram(project)
+        service.diagramType = com.helliu.drawjavacalls.model.DiagramType.DRAW_IO
         
         service.addNode("C:\\dev\\ClassA.java", "methodA", "Group1", "#methodA")
         service.addNode("C:\\dev\\ClassA.java", "methodB", "Group1")
         
-        val actual = service.generateDrawIoDiagram()
+        val actual = service.generateDiagram()
         
         // Check for group swimlane
         assertTrue(actual.contains("value=\"Group1\""))
@@ -266,11 +267,73 @@ Group1.ClassA_java.methodA --> Group1.ClassB_java.methodB
         // Check for links
         assertTrue("Link should be present in Draw.io XML", actual.contains("<UserObject id=\"node_0\" label=\"methodA\" link=\"file:///C:/dev/ClassA.java#methodA\">"))
 
+        // Check for highlighting (methodB is last added, so it should be selected)
+        assertTrue(actual.contains("fillColor=#e1f0fe")) // selected
+        assertTrue(actual.contains("fillColor=#dae8fc")) // not selected
+
         // Check for nesting: find the file swimlane ID and see if nodes use it as parent
         val fileIdMatch = "id=\"(file_[^\"]+)\"".toRegex().find(actual)
         assertNotNull(fileIdMatch)
         val fileId = fileIdMatch!!.groupValues[1]
         
         assertTrue(actual.contains("parent=\"$fileId\""))
+    }
+
+    fun testLoadDrawJavaCallDiagramDrawIo() {
+        val service = JavaMethodDiagram(project)
+        val projectRoot = project.basePath ?: ""
+        val projectFolderName = projectRoot.replace("\\", "/").substringAfterLast('/')
+
+        val drawIo = """<?xml version="1.0" encoding="UTF-8"?>
+<!-- DrawJavaCalls Generated -->
+<mxfile host="app.diagrams.net" modified="2024-01-01T00:00:00.000Z" agent="DrawJavaCalls" version="21.6.6" type="device">
+  <diagram id="draw-java-calls" name="Page-1">
+    <mxGraphModel dx="1000" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="file_1" value="ClassA.java" style="swimlane;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="100" width="240" height="140" as="geometry" />
+        </mxCell>
+        <UserObject id="node_0" label="methodA" link="file:///${'$'}projectsPath/$projectFolderName/ClassA.java#methodA">
+          <mxCell style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="file_1">
+            <mxGeometry x="40" y="40" width="160" height="60" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <mxCell id="file_2" value="ClassB.java" style="swimlane;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="260" width="240" height="140" as="geometry" />
+        </mxCell>
+        <UserObject id="node_1" label="methodB" link="file:///${'$'}projectsPath/$projectFolderName/ClassB.java#methodB">
+          <mxCell style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="file_2">
+            <mxGeometry x="40" y="40" width="160" height="60" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <mxCell id="edge_0" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="node_0" target="node_1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>""".trimIndent()
+
+        service.loadDrawJavaCallDiagram(drawIo, com.helliu.drawjavacalls.model.DiagramType.DRAW_IO)
+
+        assertEquals(2, service.elements.size)
+        assertEquals(1, service.relations.size)
+        
+        assertEquals("methodA", service.elements[0].title)
+        assertEquals(projectRoot.replace("/", "\\") + "\\ClassA.java", service.elements[0].filePath.replace("/", "\\"))
+        assertEquals("#methodA", service.elements[0].linkReference)
+
+        assertEquals("methodB", service.elements[1].title)
+        assertEquals(projectRoot.replace("/", "\\") + "\\ClassB.java", service.elements[1].filePath.replace("/", "\\"))
+        assertEquals("#methodB", service.elements[1].linkReference)
+
+        // getIdentifier() for methodA should be ClassA_java.methodA (if no group)
+        val idA = service.elements[0].getIdentifier()
+        val idB = service.elements[1].getIdentifier()
+        
+        assertEquals(idA, service.relations[0].diagramElementOrigin)
+        assertEquals(idB, service.relations[0].diagramElementTarget)
     }
 }

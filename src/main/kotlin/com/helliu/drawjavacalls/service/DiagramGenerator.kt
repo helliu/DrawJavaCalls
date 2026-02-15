@@ -4,21 +4,21 @@ import com.helliu.drawjavacalls.model.DiagramElement
 import com.helliu.drawjavacalls.model.DiagramRelation
 
 interface DiagramGenerator {
-    fun generateDiagram(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>): String
-    fun generateDiagramWithCustomRoot(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>, customRoot: String): String
+    fun generateDiagram(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>, selectedElement: DiagramElement? = null): String
+    fun generateDiagramWithCustomRoot(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>, customRoot: String, selectedElement: DiagramElement? = null): String
     fun getExtension(): String
 }
 
 class PlantUmlGenerator : DiagramGenerator {
-    override fun generateDiagram(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>): String {
-        return generateDiagramInternal(project, elements, relations, null)
+    override fun generateDiagram(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>, selectedElement: DiagramElement?): String {
+        return generateDiagramInternal(project, elements, relations, null, selectedElement)
     }
 
-    override fun generateDiagramWithCustomRoot(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>, customRoot: String): String {
-        return generateDiagramInternal(project, elements, relations, customRoot)
+    override fun generateDiagramWithCustomRoot(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>, customRoot: String, selectedElement: DiagramElement?): String {
+        return generateDiagramInternal(project, elements, relations, customRoot, selectedElement)
     }
 
-    private fun generateDiagramInternal(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>, customRoot: String?): String {
+    private fun generateDiagramInternal(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>, customRoot: String?, selectedElement: DiagramElement?): String {
         if (elements.isEmpty()) return ""
         val settings = DiagramSettings.getInstance(project)
         val elementsUml = elements.joinToString("\n\n") { generateElement(it, project, settings, customRoot) }
@@ -69,11 +69,11 @@ $relationsUml
 }
 
 class MermaidGenerator : DiagramGenerator {
-    override fun generateDiagram(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>): String {
+    override fun generateDiagram(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>, selectedElement: DiagramElement?): String {
         return generateDiagramInternal(project, elements, relations, null)
     }
 
-    override fun generateDiagramWithCustomRoot(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>, customRoot: String): String {
+    override fun generateDiagramWithCustomRoot(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>, customRoot: String, selectedElement: DiagramElement?): String {
         return generateDiagramInternal(project, elements, relations, customRoot)
     }
 
@@ -189,12 +189,12 @@ class DrawIoGenerator : DiagramGenerator {
         val fileNodes = mutableMapOf<String, FileNode>()
     }
 
-    override fun generateDiagram(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>): String {
-        return generateDiagramInternal(project, elements, relations, null)
+    override fun generateDiagram(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>, selectedElement: DiagramElement?): String {
+        return generateDiagramInternal(project, elements, relations, null, selectedElement)
     }
 
-    override fun generateDiagramWithCustomRoot(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>, customRoot: String): String {
-        return generateDiagramInternal(project, elements, relations, customRoot)
+    override fun generateDiagramWithCustomRoot(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>, customRoot: String, selectedElement: DiagramElement?): String {
+        return generateDiagramInternal(project, elements, relations, customRoot, selectedElement)
     }
 
     private fun calculateHeight(group: GroupNode, verticalSpacing: Int): Int {
@@ -222,7 +222,8 @@ class DrawIoGenerator : DiagramGenerator {
         nodeWidth: Int,
         nodeHeight: Int,
         verticalSpacing: Int,
-        padding: Int
+        padding: Int,
+        selectedElement: DiagramElement?
     ) {
         var currentY = y
         for (sub in group.subGroups.values) {
@@ -234,7 +235,7 @@ class DrawIoGenerator : DiagramGenerator {
             sb.append("          <mxGeometry x=\"$x\" y=\"$currentY\" width=\"${nodeWidth + padding * 2}\" height=\"$h\" as=\"geometry\" />\n")
             sb.append("        </mxCell>\n")
             
-            generateXml(sub, subGroupId, padding, 40, sb, elementToId, project, settings, customRoot, nodeWidth, nodeHeight, verticalSpacing, padding)
+            generateXml(sub, subGroupId, padding, 40, sb, elementToId, project, settings, customRoot, nodeWidth, nodeHeight, verticalSpacing, padding, selectedElement)
             currentY += h + 20
         }
         for (file in group.fileNodes.values) {
@@ -274,8 +275,13 @@ class DrawIoGenerator : DiagramGenerator {
                 val fullLink = "file:///${linkPath}${element.linkReference}"
                 val escapedLink = fullLink.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 
+                val isSelected = element.getIdentifier() == selectedElement?.getIdentifier()
+                val fillColor = if (isSelected) "#e1f0fe" else "#dae8fc"
+                val strokeColor = if (isSelected) "#0078d4" else "#6c8ebf"
+                val strokeWidth = if (isSelected) "strokeWidth=3;" else ""
+
                 sb.append("        <UserObject id=\"$id\" label=\"$escapedLabel\" link=\"$escapedLink\">\n")
-                sb.append("          <mxCell style=\"rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;\" vertex=\"1\" parent=\"$fileId\">\n")
+                sb.append("          <mxCell style=\"rounded=1;whiteSpace=wrap;html=1;fillColor=$fillColor;strokeColor=$strokeColor;${strokeWidth}\" vertex=\"1\" parent=\"$fileId\">\n")
                 sb.append("            <mxGeometry x=\"$childX\" y=\"$childY\" width=\"$nodeWidth\" height=\"$nodeHeight\" as=\"geometry\" />\n")
                 sb.append("          </mxCell>\n")
                 sb.append("        </UserObject>\n")
@@ -284,12 +290,13 @@ class DrawIoGenerator : DiagramGenerator {
         }
     }
 
-    private fun generateDiagramInternal(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>, customRoot: String?): String {
+    private fun generateDiagramInternal(project: com.intellij.openapi.project.Project, elements: List<DiagramElement>, relations: List<DiagramRelation>, customRoot: String?, selectedElement: DiagramElement?): String {
         if (elements.isEmpty()) return ""
         val settings = DiagramSettings.getInstance(project)
 
         val sb = StringBuilder()
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
+        sb.append("<!-- DrawJavaCalls Generated -->\n")
         sb.append("<mxfile host=\"app.diagrams.net\" modified=\"2024-01-01T00:00:00.000Z\" agent=\"DrawJavaCalls\" version=\"21.6.6\" type=\"device\">\n")
         sb.append("  <diagram id=\"draw-java-calls\" name=\"Page-1\">\n")
         sb.append("    <mxGraphModel dx=\"1000\" dy=\"1000\" grid=\"1\" gridSize=\"10\" guides=\"1\" tooltips=\"1\" connect=\"1\" arrows=\"1\" fold=\"1\" page=\"1\" pageScale=\"1\" pageWidth=\"827\" pageHeight=\"1169\" math=\"0\" shadow=\"0\">\n")
@@ -316,7 +323,7 @@ class DrawIoGenerator : DiagramGenerator {
 
         val elementToId = mutableMapOf<String, String>()
 
-        generateXml(rootGroup, "1", 100, 100, sb, elementToId, project, settings, customRoot, nodeWidth, nodeHeight, verticalSpacing, padding)
+        generateXml(rootGroup, "1", 100, 100, sb, elementToId, project, settings, customRoot, nodeWidth, nodeHeight, verticalSpacing, padding, selectedElement)
 
         relations.forEachIndexed { index, relation ->
             val id = "edge_$index"

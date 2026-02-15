@@ -100,28 +100,23 @@ class JavaMethodDiagram(val project: Project) {
         val generator = when (diagramType) {
             DiagramType.PLANT_UML -> PlantUmlGenerator()
             DiagramType.MERMAID -> MermaidGenerator()
+            DiagramType.DRAW_IO -> DrawIoGenerator()
         }
         
         // Temporarily override project root if provided
         if (customProjectRoot != null && DiagramSettings.getInstance(project).useProjectRoot) {
-             return generator.generateDiagramWithCustomRoot(project, elements, relations, customProjectRoot)
+             return generator.generateDiagramWithCustomRoot(project, elements, relations, customProjectRoot, selectedDiagramNode)
         }
 
-        return generator.generateDiagram(project, elements, relations)
+        return generator.generateDiagram(project, elements, relations, selectedDiagramNode)
     }
 
-    fun generateDrawIoDiagram(customProjectRoot: String? = null): String {
-        val generator = DrawIoGenerator()
-        if (customProjectRoot != null && DiagramSettings.getInstance(project).useProjectRoot) {
-            return generator.generateDiagramWithCustomRoot(project, elements, relations, customProjectRoot)
-        }
-        return generator.generateDiagram(project, elements, relations)
-    }
 
     fun getGenerator(): DiagramGenerator {
         return when (diagramType) {
             DiagramType.PLANT_UML -> PlantUmlGenerator()
             DiagramType.MERMAID -> MermaidGenerator()
+            DiagramType.DRAW_IO -> DrawIoGenerator()
         }
     }
 
@@ -194,13 +189,68 @@ class JavaMethodDiagram(val project: Project) {
         relations.clear()
         selectedDiagramNode = null
 
-        if (type == DiagramType.PLANT_UML) {
-            reverseEngineerPlantUml(content)
-        } else {
-            reverseEngineerMermaid(content)
+        when (type) {
+            DiagramType.PLANT_UML -> reverseEngineerPlantUml(content)
+            DiagramType.MERMAID -> reverseEngineerMermaid(content)
+            DiagramType.DRAW_IO -> reverseEngineerDrawIo(content)
         }
 
         notifyChanged()
+    }
+
+    private fun reverseEngineerDrawIo(content: String) {
+        val projectRoot = project.basePath ?: ""
+        val projectFolderName = projectRoot.replace("\\", "/").substringAfterLast('/')
+
+        // Extract nodes: <UserObject id="..." label="..." link="...">
+        val nodeRegex = """<UserObject\s+id="([^"]+)"\s+label="([^"]+)"\s+link="([^"]+)">""".toRegex()
+        val idToIdentifier = mutableMapOf<String, String>()
+
+        nodeRegex.findAll(content).forEach { match ->
+            val id = match.groupValues[1]
+            val title = match.groupValues[2].replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
+            val link = match.groupValues[3].replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
+
+            // link is file:///path#reference or file:///path:line
+            var filePathRaw = link.removePrefix("file://")
+            if (filePathRaw.startsWith("/")) filePathRaw = filePathRaw.substring(1)
+            
+            val linkReference = if (filePathRaw.contains("#")) "#" + filePathRaw.substringAfter("#")
+                               else if (filePathRaw.contains(":")) {
+                                   val lastColonIndex = filePathRaw.lastIndexOf(":")
+                                   if (lastColonIndex > 1) ":" + filePathRaw.substring(lastColonIndex + 1) else ""
+                               } else ""
+            
+            var filePath = if (filePathRaw.contains("#")) filePathRaw.substringBefore("#")
+                           else if (filePathRaw.contains(":")) {
+                               val lastColonIndex = filePathRaw.lastIndexOf(":")
+                               if (lastColonIndex > 1) filePathRaw.substring(0, lastColonIndex) else filePathRaw
+                           } else filePathRaw
+
+            if (filePath.startsWith("\$projectsPath/")) {
+                filePath = filePath.replace("\$projectsPath/$projectFolderName", projectRoot)
+            }
+            
+            val element = DiagramElement(filePath = filePath.replace("/", "\\"), title = title, linkReference = linkReference)
+            if (!elements.any { it.getIdentifier() == element.getIdentifier() }) {
+                elements.add(element)
+            }
+            idToIdentifier[id] = element.getIdentifier()
+        }
+
+        // Extract relations: <mxCell ... source="..." target="...">
+        val relationRegex = """<mxCell\s+[^>]*edge="1"[^>]*source="([^"]+)"\s+target="([^"]+)"[^>]*>""".toRegex()
+        relationRegex.findAll(content).forEach { match ->
+            val sourceId = match.groupValues[1]
+            val targetId = match.groupValues[2]
+            val origin = idToIdentifier[sourceId]
+            val target = idToIdentifier[targetId]
+            if (origin != null && target != null) {
+                if (!relations.any { it.diagramElementOrigin == origin && it.diagramElementTarget == target }) {
+                    relations.add(DiagramRelation(origin, target))
+                }
+            }
+        }
     }
 
     private fun reverseEngineerPlantUml(content: String) {
