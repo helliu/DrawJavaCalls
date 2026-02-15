@@ -46,7 +46,7 @@ abstract class AddDiagramNodeBaseAction : AnAction() {
         } else {
             val document = editor.document
             val lineNumber = document.getLineNumber(offset) + 1
-            title = psiFile.name
+            title = psiFile.virtualFile.nameWithoutExtension
             linkReference = ":$lineNumber"
         }
         

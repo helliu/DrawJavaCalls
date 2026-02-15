@@ -201,33 +201,58 @@ class JavaMethodDiagram(val project: Project) {
         val projectFolderName = projectRoot.substringAfterLast('\\').substringAfterLast('/')
 
         // Extract elements: state identifier as "title":[[linkPath#title title]];
-        val elementRegex = """state\s+([^\s]+)\s+as\s+"([^"]+)":\[\[([^#]+)#([^\s]+)\s+[^\]]+\]\];""".toRegex()
-        val stateToGroup = mutableMapOf<String, String?>()
+        // For non-java, it might be linkPath:lineNumber
+        val elementRegex = """state\s+([^\s]+)\s+as\s+"([^"]+)":\[\[([^\]]+)\]\];""".toRegex()
 
         lines.forEach { line ->
             val match = elementRegex.find(line.trim())
             if (match != null) {
                 val identifier = match.groupValues[1]
                 val title = match.groupValues[2]
-                var filePath = match.groupValues[3]
+                val linkContent = match.groupValues[3] // e.g. "path#method method" or "path:line title"
+                
+                val linkPathWithRef = linkContent.substringBeforeLast(" ")
+                val filePathRaw = if (linkPathWithRef.contains("#")) linkPathWithRef.substringBefore("#") 
+                                 else if (linkPathWithRef.contains(":")) {
+                                     // Be careful with Windows drive letters like C:\
+                                     val lastColonIndex = linkPathWithRef.lastIndexOf(":")
+                                     if (lastColonIndex > 1) linkPathWithRef.substring(0, lastColonIndex) else linkPathWithRef
+                                 }
+                                 else linkPathWithRef
+                
+                val linkReference = if (linkPathWithRef.contains("#")) "#" + linkPathWithRef.substringAfter("#")
+                                   else if (linkPathWithRef.contains(":")) {
+                                       val lastColonIndex = linkPathWithRef.lastIndexOf(":")
+                                       if (lastColonIndex > 1) ":" + linkPathWithRef.substring(lastColonIndex + 1) else ""
+                                   }
+                                   else ""
+
+                var filePath = filePathRaw
                 
                 if (filePath.startsWith("\$projectsPath/")) {
                     filePath = filePath.replace("\$projectsPath/$projectFolderName", projectRoot)
                 }
 
-                val group = if (identifier.contains(".")) {
-                    val base = identifier.substringBeforeLast(".")
-                    if (base.contains(".")) {
-                        base.substringBeforeLast(".")
-                    } else {
+                // Correctly extract group by removing the fileName part and title part from identifier
+                val fileName = filePath.substringAfterLast('\\').substringAfterLast('/')
+                val stateName = fileName.replace(".", "_")
+                
+                val group = if (identifier.endsWith(".$stateName.$title")) {
+                    identifier.substringBefore(".$stateName.$title").takeIf { it.isNotEmpty() }
+                } else if (identifier.endsWith(".$title")) {
+                    // Check if identifier is just stateName.title (no group)
+                    if (identifier == "$stateName.$title") {
                         null
+                    } else {
+                        // This shouldn't happen with our generator, but for robustness:
+                        identifier.substringBefore(".$title").substringBeforeLast(".", "").takeIf { it.isNotEmpty() }
                     }
                 } else {
                     null
                 }
 
                 if (!elements.any { it.getIdentifier() == identifier }) {
-                    elements.add(DiagramElement(filePath = filePath, title = title, group = group))
+                    elements.add(DiagramElement(filePath = filePath, title = title, group = group, linkReference = linkReference))
                 }
             }
         }
@@ -250,10 +275,10 @@ class JavaMethodDiagram(val project: Project) {
         val projectFolderName = projectRoot.substringAfterLast('\\').substringAfterLast('/')
 
         // In Mermaid, we have identifiers and labels: id["label"]
-        // And links: click id "linkPath#title"
+        // And links: click id "linkPath#title" or "linkPath:lineNumber"
         val idToElement = mutableMapOf<String, DiagramElement>()
         val nodeRegex = """([^\s\[]+)\["([^"]+)"\]""".toRegex()
-        val linkRegex = """click\s+([^\s]+)\s+"([^#]+)#([^"]+)"""".toRegex()
+        val linkRegex = """click\s+([^\s]+)\s+"([^"]+)"""".toRegex()
 
         // First pass: find all nodes and their labels (titles)
         lines.forEach { line ->
@@ -270,7 +295,23 @@ class JavaMethodDiagram(val project: Project) {
             val match = linkRegex.find(line.trim())
             if (match != null) {
                 val id = match.groupValues[1]
-                var filePath = match.groupValues[2]
+                val linkPathWithRef = match.groupValues[2]
+                
+                val filePathRaw = if (linkPathWithRef.contains("#")) linkPathWithRef.substringBefore("#") 
+                                 else if (linkPathWithRef.contains(":")) {
+                                     val lastColonIndex = linkPathWithRef.lastIndexOf(":")
+                                     if (lastColonIndex > 1) linkPathWithRef.substring(0, lastColonIndex) else linkPathWithRef
+                                 }
+                                 else linkPathWithRef
+                
+                val linkReference = if (linkPathWithRef.contains("#")) "#" + linkPathWithRef.substringAfter("#")
+                                   else if (linkPathWithRef.contains(":")) {
+                                       val lastColonIndex = linkPathWithRef.lastIndexOf(":")
+                                       if (lastColonIndex > 1) ":" + linkPathWithRef.substring(lastColonIndex + 1) else ""
+                                   }
+                                   else ""
+
+                var filePath = filePathRaw
                 
                 if (filePath.startsWith("\$projectsPath/")) {
                     filePath = filePath.replace("\$projectsPath/$projectFolderName", projectRoot)
@@ -279,27 +320,24 @@ class JavaMethodDiagram(val project: Project) {
                 val element = idToElement[id]
                 if (element != null) {
                     element.filePath = filePath
-                    // Re-calculate group from id if possible, but Mermaid ids are often generated UUIDs
-                    // Actually, the identifier we use in getIdentifier() might be what Mermaid uses if it's not a subgraph
-                    // Wait, MermaidGenerator uses element.getIdentifier() for relations and links!
+                    element.linkReference = linkReference
                 }
             }
         }
 
-        // Extract group from structure if possible. 
-        // In MermaidGenerator, groups are subgraphs. 
-        // This is getting complex. Let's see if we can simplify.
-        // Actually, MermaidGenerator uses element.getIdentifier() as the node ID in relations and links.
-        // So 'id' in `click id` IS the identifier.
-
         idToElement.forEach { (id, element) ->
             if (element.filePath.isNotEmpty()) {
-                val group = if (id.contains(".")) {
-                    val base = id.substringBeforeLast(".")
-                    if (base.contains(".")) {
-                        base.substringBeforeLast(".")
-                    } else {
+                val fileName = element.filePath.substringAfterLast('\\').substringAfterLast('/')
+                val stateName = fileName.replace(".", "_")
+                val title = element.title
+                
+                val group = if (id.endsWith(".$stateName.$title")) {
+                    id.substringBefore(".$stateName.$title").takeIf { it.isNotEmpty() }
+                } else if (id.endsWith(".$title")) {
+                    if (id == "$stateName.$title") {
                         null
+                    } else {
+                        id.substringBefore(".$title").substringBeforeLast(".", "").takeIf { it.isNotEmpty() }
                     }
                 } else {
                     null
